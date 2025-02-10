@@ -4,8 +4,26 @@ ENV PYTHONDONTWRITEBYTECODE 1
 
 ENV PYTHONUNBUFFERED 1
 
+RUN apt-get update -y && apt-get upgrade -y
+RUN apt-get install -y libgdal-dev build-essential libpq-dev
+
+RUN mkdir -p /home/geouser
+
+RUN groupadd --gid 1001 geouser && \
+    useradd --uid 1001 --gid geouser --home /home/geouser geouser
+
+RUN pip install pipenv
+
+ENV HOME=/home/geouser
+ENV APP_HOME=/home/geouser/geoportal
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+COPY ./Pipfile ./Pipfile.lock $APP_HOME
+RUN pipenv install --deploy --dev --system
+
 # Working directory
-WORKDIR /geoportal
+# WORKDIR /geoportal
 
 # Installing Dependencies
 COPY ./requirements.txt /geoportal/requirements.txt
@@ -13,4 +31,9 @@ COPY ./requirements.txt /geoportal/requirements.txt
 RUN pip install virtualenv && virtualenv install --sytem
 
 # Copy project files and directories
-COPY . /geoportal/
+COPY . $APP_HOME
+# COPY . /geoportal/
+
+RUN chown -R geouser:geouser ${APP_HOME}
+
+USER geouser
