@@ -8,6 +8,8 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from django.views.decorators.csrf import csrf_exempt
 import json
+from datetime import datetime
+import os
 # import environ
 
 workspace = 'geoportal'
@@ -22,44 +24,47 @@ class CountiesViewset(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     @csrf_exempt
     def category1(self, request):
-
-        if request.method == 'GET':
+        try:
+            if request.method == 'GET':
+                    data = request.GET.copy()
+            elif request.method == 'POST':
                 data = request.GET.copy()
-        elif request.method == 'POST':
-            data = request.GET.copy()
-        else:
-            return HttpResponseBadRequest('Only POST and GET methods are supported')
+            else:
+                return HttpResponseBadRequest('Only POST and GET methods are supported')
 
-        category_data = Counties.objects.all()
+            category_data = Counties.objects.all()
+            write_log(str(category_data))
+            serialized = serialize('geojson',  category_data)
+            
+            counties = [json.loads(serialized)]
+            write_log(counties)
+            # print(regions[0]['features'][0]['geometry'])
+            """convert geometry to geom in line with existing system """
 
-        serialized = serialize('geojson',  category_data)
-        
-        counties = [json.loads(serialized)]
+            counties_dataset = counties[0]
 
-        # print(regions[0]['features'][0]['geometry'])
-        """convert geometry to geom in line with existing system """
-
-        counties_dataset = counties[0]
-
-        counties_data_modified = []
-        
-        for feature in counties_dataset['features']:
-            geom = dict(geometry=feature['geometry'])
-            del feature['geometry']
-            feature['geom'] = geom['geometry']
-            feature['geom']['bbox'] = None
-            # print(feature['geom'])
-            output_data = dict() 
-            for prop in feature['properties']:
-               
-                output_data[prop] = feature['properties'][prop]
-            output_data['geom'] = geom['geometry'] 
-            counties_data_modified.append(
-                output_data
-            )
+            counties_data_modified = []
+            
+            for feature in counties_dataset['features']:
+                geom = dict(geometry=feature['geometry'])
+                del feature['geometry']
+                feature['geom'] = geom['geometry']
+                feature['geom']['bbox'] = None
+                # print(feature['geom'])
+                output_data = dict() 
+                for prop in feature['properties']:
+                
+                    output_data[prop] = feature['properties'][prop]
+                output_data['geom'] = geom['geometry'] 
+                counties_data_modified.append(
+                    output_data
+                )
 
 
-        return JsonResponse(counties, safe=False)
+            return JsonResponse(counties, safe=False)
+        except Exception as ex:
+            write_log(f"Error in category1 view: {str(ex)}")
+            return JsonResponse({"Error":"An exception error occured - "})
 
 
 class RasterViewSet(viewsets.ModelViewSet):
@@ -240,7 +245,7 @@ def counties_api(request):
     if request.method == 'GET':
         counties = Counties.objects.all()
         counties_serializer = countiesSerializer(counties, many=True)
-        
+        write_log(counties_serializer)
         return JsonResponse(counties_serializer.data, safe=False, status=200)
     
 def dashboard(request):
@@ -295,3 +300,20 @@ def user_logout(request):
 
 # def dashboard(request):
 #     pass
+
+
+class Logging:
+    
+    @staticmethod
+    def write_log(error_message):
+        try:
+            log_path = "C:\\geoportal_logs"
+            if not os.path.exists(log_path):
+                os.makedirs(log_path)
+            
+            log_file_name = os.path.join(log_path, f"{datetime.now():%Y-%b-%d}.txt")
+            
+            with open(log_file_name, "a") as log_file:
+                log_file.write(f"{datetime.now():%Y-%b-%d %H:%M:%S}: => {error_message}\n")
+        except Exception as ex:
+            pass  # Optionally, handle exceptions (e.g., print(ex) or log to another location)
